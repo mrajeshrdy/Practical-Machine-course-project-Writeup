@@ -1,0 +1,142 @@
+---
+title: "Final Project - Practical Machine Learning"
+author: "Pushkar Sinngh Bhauryal"
+date: "December 14, 2015"
+output: html_document
+---
+###Introduction
+
+For this project, we are given data from accelerometers on the belt, forearm, arm, and dumbell of 6 research study participants. Our training data consists of accelerometer data and a label identifying the quality of the activity the participant was doing. Our testing data consists of accelerometer data without the identifying label. Our goal is to predict the labels for the test set observations.
+
+Below is the code I used when creating the model, estimating the out-of-sample error, and making predictions. I also include a description of each step of the process.
+
+###Data
+The training data for this project are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv)
+
+The test data are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. 
+
+#### Requered Library 
+
+```{r, echo=TRUE,eval=TRUE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+library(knitr)
+library(corrplot)
+```
+
+#### Getting and loading the data
+
+```{r, echo=TRUE,eval=TRUE}
+
+ptrain <- read.csv("pml-training.csv")
+ptest <- read.csv("pml-testing.csv")
+```
+
+Because I want to be able to estimate the out-of-sample error, I randomly split the full training data (ptrain) into a smaller training set (ptrain1) and a validation set (ptrain2):
+
+
+
+```{r, echo=TRUE,eval=TRUE}
+
+partition <- createDataPartition(y=ptrain$classe, p=0.7, list=F)
+ptrain1 <- ptrain[partition, ]
+ptrain2 <- ptrain[-partition, ]
+```
+
+Now I'm removing those variable with have maximum valuses as NA, Variance Near by zero and those variable wich do nat have a significance on pridiction.
+
+```{r, echo=TRUE,eval=TRUE}
+
+# Near zero variance
+
+nzv<- nearZeroVar(ptrain1)
+
+ptrain1<- ptrain1[,-nzv]
+ptrain2<- ptrain2[,-nzv]
+
+# Mostly NA
+
+mostlyNa<- sapply(ptrain1,function(x) mean(is.na(x)))> 0.95
+ptrain1<- ptrain1[,mostlyNa==F]
+ptrain2<- ptrain2[,mostlyNa==F]
+
+#non singificance for prediction (X, user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp), which happen to be the first five variables
+ptrain1<- ptrain1[,-(1:5)]
+ptrain2<- ptrain2[,-(1:5)]
+
+```
+
+###EVALUATION
+
+####Classification Tree
+```{r, echo=TRUE,eval=TRUE}
+modFit <- train(classe ~ ., data = ptrain1, method="rpart")
+print(modFit, digits=3)
+print(modFit$finalModel, digits=3)
+fancyRpartPlot(modFit$finalModel)
+```
+
+Now run the prediction model against ptrain2
+
+
+```{r, echo=TRUE,eval=TRUE}
+
+# Run against ptrain2
+predictions <- predict(modFit, ptrain2)
+print(confusionMatrix(predictions, ptrain2$classe), digits=4)
+
+```
+
+It was really disappinting to see this low accuracy (0.4833)
+
+###Random Forest
+
+```{r, echo=TRUE,eval=TRUE}
+#Train on training set 1 of 4 with only cross validation.
+set.seed(666)
+modFit <- train(ptrain1$classe ~ ., method="rf", trControl=trainControl(method = "cv", number = 4), data=ptrain1)
+print(modFit, digits=3)
+```
+
+Now run the prediction model against ptrain2
+
+```{r, echo=TRUE,eval=TRUE}
+predictions <- predict(modFit, newdata=ptrain2)
+print(confusionMatrix(predictions, ptrain2$classe), digits=4)
+accuracy <- postResample(predictions, ptrain2$classe)
+accuracy
+oose <- 1 - as.numeric(confusionMatrix(predictions, ptrain2$classe)$overall[1])
+oose
+```
+
+###Predicting for Test Data Set
+
+Then, we estimate the performance of the model on the validation data set (ptest).
+
+```{r, echo=TRUE,eval=TRUE}
+pridictions<-predict(modFit, newdata=ptest)
+print(pridictions)
+```
+
+### Figures
+1-####Correlation Matrix Visualization
+```{r, echo=TRUE,eval=TRUE}
+corrPlot <- cor(ptrain1[, -length(names(ptrain1))])
+corrplot(corrPlot, method="color")
+```
+
+2-####Decision Tree Visualization
+```{r, echo=TRUE,eval=TRUE}
+treeModel <- rpart(classe ~ ., data=ptrain1, method="class")
+prp(treeModel)
+```
+
+
+
+
