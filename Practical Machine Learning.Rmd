@@ -136,7 +136,7 @@ corrplot(corrPlot, method="color")
 treeModel <- rpart(classe ~ ., data=ptrain1, method="class")
 prp(treeModel)
 ```
-
+my doc
 
 
 
